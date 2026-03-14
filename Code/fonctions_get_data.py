@@ -1,6 +1,7 @@
 import streamlit as st
 import fastf1
 import pandas as pd
+import numpy as np
 
 from Code.constants import TEAM_COLORS
 
@@ -12,9 +13,9 @@ def get_calendar(year):
 
     colonnes = [
         'RoundNumber','Country','Location','EventDate','EventName',
-        'Session1','Session1DateUtc','Session2','Session2DateUtc',
-        'Session3','Session3DateUtc','Session4','Session4DateUtc',
-        'Session5','Session5DateUtc'
+        'EventFormat','Session1','Session1DateUtc','Session2',
+        'Session2DateUtc','Session3','Session3DateUtc','Session4',
+        'Session4DateUtc','Session5','Session5DateUtc'
     ]
     
     df_calendar = df_calendar[colonnes]
@@ -28,7 +29,7 @@ def get_calendar(year):
 
     return df_calendar
 
-@st.cache_data()
+@st.cache_data(show_spinner="Calcul des classements F1...")
 def get_current_standings(actual_date):
     drivers_df = pd.DataFrame()
     constructors_df = pd.DataFrame()
@@ -38,7 +39,15 @@ def get_current_standings(actual_date):
     df_calendar = get_calendar(actual_date.year)
     
     try:
-        completed_events = df_calendar[df_calendar['Session5DateUtc'] < actual_date]
+        cond_sprint = (df_calendar['EventFormat'] == 'sprint_qualifying')
+        cond_conv = (df_calendar['EventFormat'] == 'conventional')
+
+        reference_date = np.select(
+            [cond_sprint, cond_conv], 
+            [df_calendar['Session3DateUtc'], df_calendar['Session5DateUtc']], 
+            default=df_calendar['Session5DateUtc'] )
+
+        completed_events = df_calendar[reference_date <= actual_date]
 
         for _, event in completed_events.iterrows():
             try:
@@ -54,20 +63,16 @@ def get_current_standings(actual_date):
                         
                         # Pilotes
                         if abb not in drivers_data:
-                            drivers_data[abb] = {'Pilote': row['FullName'], 'Ecurie': team, 'Points': 0.0, 'Victoires': 0}
+                            drivers_data[abb] = {'Pilote': row['FullName'], 'Ecurie': team, 'Points': 0.0}
                         drivers_data[abb]['Points'] += pts
-                        if row['Position'] == 1.0:
-                            drivers_data[abb]['Victoires'] += 1
                             
                         # Constructeurs
                         if team not in constructors_data:
-                            constructors_data[team] = {'Ecurie': team, 'Points': 0.0, 'Victoires': 0}
+                            constructors_data[team] = {'Ecurie': team, 'Points': 0.0}
                         constructors_data[team]['Points'] += pts
-                        if row['Position'] == 1.0:
-                            constructors_data[team]['Victoires'] += 1
                 
                 # Gestion des points Sprint
-                if event['EventFormat'] == 'sprint':
+                if event['Session3'] == 'Sprint':
                     s_sess = fastf1.get_session(actual_date.year, event['RoundNumber'], 'S')
                     s_sess.load(telemetry=False, weather=False, messages=False)
                     if hasattr(s_sess, 'results'):
@@ -85,133 +90,71 @@ def get_current_standings(actual_date):
         # Création des DataFrames finaux
         if drivers_data:
             drivers_df = pd.DataFrame(drivers_data.values())
-            drivers_df = drivers_df.sort_values(by=['Points', 'Victoires'], ascending=False).reset_index(drop=True)
+            drivers_df = drivers_df.sort_values(by=['Points'], ascending=False).reset_index(drop=True)
             drivers_df['Pos'] = drivers_df.index + 1
-            drivers_df = drivers_df[['Pos', 'Pilote', 'Ecurie', 'Points', 'Victoires']]
+            drivers_df = drivers_df[['Pos', 'Pilote', 'Ecurie', 'Points']]
             
         if constructors_data:
             constructors_df = pd.DataFrame(constructors_data.values())
-            constructors_df = constructors_df.sort_values(by=['Points', 'Victoires'], ascending=False).reset_index(drop=True)
+            constructors_df = constructors_df.sort_values(by=['Points'], ascending=False).reset_index(drop=True)
             constructors_df['Pos'] = constructors_df.index + 1
-            constructors_df = constructors_df[['Pos', 'Ecurie', 'Points', 'Victoires']]
+            constructors_df = constructors_df[['Pos', 'Ecurie', 'Points']]
         
     except Exception as e:
         st.error(f"Erreur lors de la récupération des classements : {e}")
         
     return drivers_df, constructors_df
 
-@st.cache_data()
-def display_f1_standings(drivers_df, constructors_df):
-    # CSS pour le style "Live Timing"
-    st.markdown("""
-        <style>
-        .standing-row {
-            display: flex;
-            align-items: center;
-            background-color: #15151E;
-            margin-bottom: 6px;
-            padding: 10px 15px;
-            border-radius: 4px;
-        }
-        .standing-pos {
-            width: 30px;
-            font-weight: bold;
-            font-size: 0.9em;
-            color: #949498;
-        }
-        .team-bar {
-            width: 4px;
-            height: 20px;
-            margin-right: 12px;
-            border-radius: 2px;
-        }
-        .standing-name {
-            flex-grow: 1;
-            font-weight: 500;
-            text-transform: uppercase;
-            font-size: 0.9em;
-            letter-spacing: 0.5px;
-        }
-        .standing-pts {
-            font-weight: bold;
-            font-family: 'Arial Black', sans-serif;
-            min-width: 40px;
-            text-align: right;
-        }
-        .podium-card {
-            background: linear-gradient(180deg, #1f1f2a 0%, #15151e 100%);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border-bottom: 3px solid #FF1801;
-            margin-bottom: 15px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+@st.cache_data(show_spinner="Calcul des statistiques F1...")
+def calculate_race_metrics(_session):
+    total_race_overtakes = 0
+    driver_stats = []
 
-    col_left, col_right = st.columns(2, gap="large")
+    for driver_id in _session.drivers:
+        driver_info = _session.get_driver(driver_id)
+        abb = driver_info['Abbreviation']
+        statut = driver_info['Status']
+        
+        driver_overtakes = 0
+        net_gain = 0
+        
+        # On récupère les tours
+        laps = _session.laps.pick_driver(abb)
+        
+        if not laps.empty:
+            # Calcul des dépassements tour par tour
+            pos_series = laps['Position'].values
+            if len(pos_series) > 1:
+                for i in range(len(pos_series) - 1):
+                    if pos_series[i] > pos_series[i+1]:
+                        driver_overtakes += 1
+            
+            start_pos = driver_info['GridPosition']
+            end_pos = driver_info['Position']
+            net_gain = start_pos - end_pos
+            
+        else:
+            # On garde les valeurs à 0, mais on ne calcule rien sur 'laps'
+            net_gain = 0
+            driver_overtakes = 0
 
-    # --- CLASSEMENT PILOTES ---
-    with col_left:
-        st.markdown("### 🏎️ CLASSEMENT PILOTES")
-        if not drivers_df.empty:
-            # Podium Top 3 (Version simplifiée sans victoires)
-            p_cols = st.columns(3)
-            order = [1, 0, 2] # P2, P1, P3
-            for i, idx in enumerate(order):
-                if idx < len(drivers_df):
-                    row = drivers_df.iloc[idx]
-                    color = TEAM_COLORS.get(row['Ecurie'], '#FFFFFF')
-                    with p_cols[i]:
-                        st.markdown(f"""
-                            <div class="podium-card" style="border-top: 4px solid {color};">
-                                <div style="font-size:0.7em; color:#949498; font-weight:bold;">P{row['Pos']}</div>
-                                <div style="font-weight:bold; font-size:1em;">{row['Pilote'].split()[-1].upper()}</div>
-                                <div style="color:#FF1801; font-weight:bold;">{int(row['Points'])}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
+        total_race_overtakes += driver_overtakes
 
-            # Reste du classement (P4+)
-            for _, row in drivers_df.iloc[3:].iterrows():
-                color = TEAM_COLORS.get(row['Ecurie'], '#FFFFFF')
-                st.markdown(f"""
-                    <div class="standing-row">
-                        <div class="standing-pos">{row['Pos']}</div>
-                        <div class="team-bar" style="background-color: {color};"></div>
-                        <div class="standing-name">{row['Pilote']}</div>
-                        <div class="standing-pts">{int(row['Points'])}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+        driver_stats.append({
+            'Driver': abb,
+            'Overtakes': driver_overtakes,
+            'NetGain': net_gain,
+            'Status': statut
+        })
 
-    # --- CLASSEMENT CONSTRUCTEURS ---
-    with col_right:
-        st.markdown("### 🏗️ CLASSEMENT ECURIES")
-        if not constructors_df.empty:
-            # Podium Top 3
-            c_cols = st.columns(3)
-            for i, idx in enumerate(order):
-                if idx < len(constructors_df):
-                    row = constructors_df.iloc[idx]
-                    color = TEAM_COLORS.get(row['Ecurie'], '#FFFFFF')
-                    with c_cols[i]:
-                        name = row['Ecurie'].replace(' Racing', '').replace('F1 Team', '').upper()
-                        with c_cols[i]:
-                            st.markdown(f"""
-                                <div class="podium-card" style="border-top: 4px solid {color};">
-                                    <div style="font-size:0.7em; color:#949498; font-weight:bold;">P{row['Pos']}</div>
-                                    <div style="font-weight:bold; font-size:0.8em; height:30px; display:flex; align-items:center; justify-content:center;">{name}</div>
-                                    <div style="color:#FF1801; font-weight:bold;">{int(row['Points'])}</div>
-                                </div>
-                            """, unsafe_allow_html=True)
+    # Conversion en DataFrame
+    df_stats = pd.DataFrame(driver_stats)
+    
+    if not df_stats.empty and df_stats['Overtakes'].max() > 0:
+        best_overtaker = df_stats.loc[df_stats['Overtakes'].idxmax()]
+    else:
+        best_overtaker = {'Driver': 'N/A', 'Overtakes': 0}
+    
+    num_dnf = len(df_stats[~df_stats['Status'].str.contains('Finished|Lapped')])
 
-            # Reste du classement (P4+)
-            for _, row in constructors_df.iloc[3:].iterrows():
-                color = TEAM_COLORS.get(row['Ecurie'], '#FFFFFF')
-                st.markdown(f"""
-                    <div class="standing-row">
-                        <div class="standing-pos">{row['Pos']}</div>
-                        <div class="team-bar" style="background-color: {color};"></div>
-                        <div class="standing-name">{row['Ecurie']}</div>
-                        <div class="standing-pts">{int(row['Points'])}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+    return total_race_overtakes, num_dnf, best_overtaker

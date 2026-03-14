@@ -4,7 +4,8 @@ import pandas as pd
 from datetime import datetime
 import os
 
-from Code.fonctions_get_data import get_calendar, get_current_standings, display_f1_standings
+from Code.fonctions_get_data import get_calendar, get_current_standings
+from Code.fonctions_create_plot import display_f1_standings
 from Code.constants import DRAPEAUX
 
 # ----------------------------
