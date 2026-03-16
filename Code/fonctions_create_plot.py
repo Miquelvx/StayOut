@@ -3,7 +3,6 @@ import plotly.graph_objects as go
 
 from Code.constants import TEAM_COLORS
 
-@st.cache_data(show_spinner="Calcul des classements F1...")
 def display_f1_standings(drivers_df, constructors_df):
     # CSS pour le style "Live Timing"
     st.markdown("""
@@ -120,38 +119,39 @@ def display_f1_standings(drivers_df, constructors_df):
                 """, unsafe_allow_html=True)
 
 
-@st.cache_data()
 def create_lap_chart(_session):
     fig = go.Figure()
 
-    # Récupérer la liste des abréviations des pilotes présents dans la session
-    drivers = _session.drivers
-    driver_abbs = [_session.get_driver(d)['Abbreviation'] for d in drivers]
-
     sorted_drivers = _session.results.sort_values(by='ClassifiedPosition')['Abbreviation'].tolist()
 
-    for abb in driver_abbs:
-        # Filtrer les données pour le pilote
-        driver_laps = _session.laps.pick_driver(abb)
+    for abb in sorted_drivers:
+        driver_res = _session.results[_session.results['Abbreviation'] == abb].iloc[0]
         
-        # Si le pilote n'a pas de tours (ex: DNS), on passe au suivant
-        if driver_laps.empty:
-            continue
-            
-        # Récupérer les infos du pilote
-        driver_info = _session.get_driver(abb)
-        team_name = driver_info['TeamName']
+        team_name = driver_res['TeamName']
+        grid_pos = driver_res['GridPosition']
+        final_pos = int(driver_res['Position'])
+        
+        driver_laps = _session.laps.pick_driver(abb)
+
+        x_values = [0]
+        y_values = [grid_pos]
+
+        # Si le pilote a fait des tours, on les ajoute à la suite
+        if not driver_laps.empty:
+            x_values.extend(driver_laps['LapNumber'].tolist())
+            y_values.extend(driver_laps['Position'].tolist())
+        
         color = TEAM_COLORS.get(team_name, '#808080')
         
         # Ajouter la ligne au graphique
         fig.add_trace(go.Scatter(
-            x=driver_laps['LapNumber'],
-            y=driver_laps['Position'],
+            x=x_values,
+            y=y_values,
             mode='lines+markers',
-            name=f"{abb} ({team_name})",
+            name=f"P{final_pos} - {abb} ({team_name})",
             line=dict(color=color, width=2),
             marker=dict(size=4),
-            # Rendre le survol plus propre
+            legendrank=final_pos,
             hovertemplate="<b>" + abb + "</b><br>Pos: %{y}<extra></extra>"
         ))
 
@@ -191,6 +191,7 @@ def create_lap_chart(_session):
             bordercolor="white"
             ),
         legend=dict(
+            traceorder="normal",
             orientation="v",
             yanchor="top",
             y=1,
