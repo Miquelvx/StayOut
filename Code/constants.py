@@ -35,5 +35,9 @@ TEAM_COLORS = {
     'Racing Bulls': '#6692ff', 
     'Audi': '#ff2d00',
     'Haas F1 Team': '#dee1e2',
-    'Cadillac': "#aaaaad"
+    'Cadillac': "#aaaaad",
+    'Kick Sauber': "#01C00E",
+    'RB': "#6692FF",
+    'AlphaTauri': "#5E8FAA",
+    'Alfa Romeo': "#C92D4B"
 }

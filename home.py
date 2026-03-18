@@ -3,7 +3,9 @@ import fastf1
 import pandas as pd
 from datetime import datetime
 import os
+import time
 
+from Code.fonctions_cache_data import get_cache_size, clear_cache_data
 from Code.fonctions_get_data import get_calendar, get_current_standings
 from Code.fonctions_create_plot import display_f1_standings
 from Code.constants import DRAPEAUX
@@ -54,20 +56,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-def get_dir_size(path='.'):
-    """Calcule la taille totale d'un dossier en MegaOctets."""
-    total_size = 0
-    try:
-        for dirpath, dirnames, filenames in os.walk(path):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                # skip if it is symbolic link
-                if not os.path.islink(fp):
-                    total_size += os.path.getsize(fp)
-    except FileNotFoundError:
-        return 0
-    return total_size / (1024 * 1024) # Retourne en MB
-
 # ----------------------------
 # MAIN STREAMLIT APP
 # ----------------------------
@@ -77,33 +65,23 @@ def main():
     with st.sidebar:
         st.divider()
         st.subheader("⚙️ Gestion du Cache")
-        
-        # 1. Estimation de la taille
-        # Note : Remplace 'cache_dir' par le nom du dossier où tu as activé le cache FastF1
-        # Si tu n'as pas défini de dossier spécifique, FastF1 utilise souvent un dossier temporaire
-        cache_path = './f1_cache' # Dossier par défaut si tu as fait fastf1.cache.enable_cache('./cache')
-        
+
+        cache_path = './f1_cache'
+
         if os.path.exists(cache_path):
-            size = get_dir_size(cache_path)
+            size = get_cache_size(cache_path)
             st.write(f"Taille du cache disque : **{size:.2f} MO**")
         else:
             st.write("Cache disque : *Non détecté ou vide*")
 
-        # 2. Bouton pour vider le cache
         if st.button("🗑️ Vider tout le cache", use_container_width=True):
-            # Vide le cache des fonctions @st.cache_data
             st.cache_data.clear()
+            time.sleep(0.5)
             
-            # Optionnel : Si tu veux aussi vider physiquement le dossier FastF1
-            # Attention : cela forcera le retéléchargement de TOUTES les données lors du prochain appel
-            # if os.path.exists(cache_path):
-            #     import shutil
-            #     shutil.rmtree(cache_path)
-            #     os.makedirs(cache_path)
-                
-            st.success("Cache vidé avec succès !")
-            st.rerun() # Relance l'app pour mettre à jour l'affichage
-    
+            if clear_cache_data(cache_path):
+                st.success("Nettoyage effectué.")
+                st.rerun()
+
     # Récupération des données
     now = datetime.now()
     actual_year = now.year

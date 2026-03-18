@@ -36,6 +36,12 @@ def get_race_session(year, round_num):
         sess.load(telemetry=True, weather=False, messages=False)
     return sess
 
+def get_qualif_session(year, round_num):
+    with st.spinner("Chargement de la qualification..."):
+        sess = fastf1.get_session(year, round_num, 'Q')
+        sess.load(telemetry=True, weather=False, messages=False)
+    return sess
+
 def get_current_standings(actual_date):
     with st.spinner("Calcul des classements F1..."):
         drivers_df = pd.DataFrame()
@@ -169,3 +175,37 @@ def calculate_race_metrics(_session):
         num_dnf = len(df_stats[~df_stats['Status'].str.contains('Finished|Lapped')])
 
     return total_race_overtakes, num_dnf, best_overtaker
+
+def get_circuit_corners(_session):
+    try:
+        # Récupération des infos du circuit
+        circuit_info = _session.get_circuit_info()
+        corners = circuit_info.corners
+        return corners
+    except Exception:
+        return None
+
+def get_drivers_telemetry(_session, selected_drivers):
+    with st.spinner("Récupération des meilleurs tours..."):
+        telemetry_dict = {}
+        
+        for abb in selected_drivers:
+            # On récupère le meilleur tour du pilote
+            laps_driver = _session.laps.pick_driver(abb)
+            fastest_lap = laps_driver.pick_fastest()
+            
+            # On extrait la télémétrie et on ajoute la distance (crucial pour l'alignement)
+            telemetry = fastest_lap.get_telemetry().add_distance()
+            
+            # On stocke aussi le temps pour l'afficher dans la légende
+            lap_time = fastest_lap['LapTime']
+            # Formatage propre du temps (MM:SS.ms)
+            str_lap_time = str(lap_time)[10:19] 
+            
+            telemetry_dict[abb] = {
+                'telemetry': telemetry,
+                'lap_time': str_lap_time,
+                'team': fastest_lap['Team']
+            }
+            
+        return telemetry_dict

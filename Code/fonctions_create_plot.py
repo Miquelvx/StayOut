@@ -1,7 +1,9 @@
 import streamlit as st
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from Code.constants import TEAM_COLORS
+from Code.fonctions_get_data import get_circuit_corners
 
 def display_f1_standings(drivers_df, constructors_df):
     # CSS pour le style "Live Timing"
@@ -203,3 +205,177 @@ def create_lap_chart(_session):
     )
 
     return fig
+
+def create_comparison_telemetry(telemetry_data):
+    fig = go.Figure()
+
+    color_usage_count = {}
+
+    for abb, data in telemetry_data.items():
+        telemetry = data['telemetry']
+        team_color = TEAM_COLORS.get(data['team'], '#808080')
+        
+        color_usage_count[team_color] = color_usage_count.get(team_color, 0) + 1
+        line_style = 'solid'
+        if color_usage_count[team_color] == 2:
+            line_style = 'dash'
+        elif color_usage_count[team_color] > 2:
+            line_style = 'dot'
+        
+        fig.add_trace(go.Scatter(
+            x=telemetry['Distance'],
+            y=telemetry['Speed'],
+            mode='lines',
+            name=f"{abb} ({data['lap_time']})",
+            line=dict(
+                color=team_color, 
+                width=2, 
+                dash=line_style  # Application du style dynamique
+            ),
+            hovertemplate=f"<b>{abb}</b><br>Vitesse: %{{y}} km/h<br>Distance: %{{x}}m<extra></extra>"
+        ))
+
+    fig.update_layout(
+        title="<b>Comparaison de Vitesse : Meilleur Tour</b>",
+        xaxis_title="Distance (m)",
+        yaxis_title="Vitesse (km/h)",
+        template="plotly_dark",
+        height=500,
+        hovermode="x unified",
+        legend=dict(
+            orientation="h", 
+            yanchor="bottom", 
+            y=1.02, 
+            xanchor="right", 
+            x=1,
+            font=dict(
+                size=12,         
+                color="white"    
+            )
+        ),
+        showlegend=True
+    )
+
+    return fig
+
+def create_pedal_comparison(telemetry_data):
+    # On crée 2 lignes : une pour l'accélérateur, une pour le frein
+    fig = make_subplots(
+        rows=2, cols=1, 
+        shared_xaxes=True, 
+        vertical_spacing=0.1,
+        subplot_titles=("Accélérateur (%)", "Frein (On/Off)"),
+        row_heights=[0.5, 0.5]
+    )
+
+    color_usage_count = {}
+
+    for abb, data in telemetry_data.items():
+        telemetry = data['telemetry']
+        team_color = TEAM_COLORS.get(data['team'], '#808080')
+        
+        # Gestion du style de ligne pour les coéquipiers
+        color_usage_count[team_color] = color_usage_count.get(team_color, 0) + 1
+        line_style = 'dash' if color_usage_count[team_color] == 2 else 'solid'
+        
+        # --- 1. THROTTLE (Ligne 1) ---
+        fig.add_trace(go.Scatter(
+            x=telemetry['Distance'], 
+            y=telemetry['Throttle'],
+            name=f"{abb}", 
+            line=dict(color=team_color, width=2, dash=line_style),
+            legendgroup=abb,
+            hovertemplate="<b>" + abb + "</b><br>Accel: %{y}%<extra></extra>"
+        ), row=1, col=1)
+
+        # --- 2. BRAKE (Ligne 2) ---
+        fig.add_trace(go.Scatter(
+            x=telemetry['Distance'], 
+            y=telemetry['Brake'],
+            name=f"{abb} (Frein)", 
+            line=dict(color=team_color, width=2, dash=line_style),
+            legendgroup=abb,
+            showlegend=False, # On ne l'affiche qu'une fois dans la légende
+            hovertemplate="<b>" + abb + "</b><br>Frein: %{y}<extra></extra>"
+        ), row=2, col=1)
+
+    # --- Configuration Visuelle ---
+    fig.update_layout(
+        height=700,
+        template="plotly_dark",
+        title_text="<b>Analyse du Pilotage : Pédalier</b>",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        showlegend=True
+    )
+
+    # Paramètres des axes
+    fig.update_yaxes(title_text="Throttle %", range=[-5, 105], row=1, col=1)
+    fig.update_yaxes(title_text="Brake", range=[-0.1, 1.1], dtick=1, row=2, col=1)
+    fig.update_xaxes(title_text="Distance (m)", row=2, col=1)
+
+    return fig
+
+def create_gear_comparison(telemetry_data):
+    fig = go.Figure()
+    
+    color_usage_count = {}
+
+    for abb, data in telemetry_data.items():
+        telemetry = data['telemetry']
+        team_color = TEAM_COLORS.get(data['team'], '#808080')
+        
+        # Gestion du style de ligne (Plein vs Tirets)
+        color_usage_count[team_color] = color_usage_count.get(team_color, 0) + 1
+        line_style = 'dash' if color_usage_count[team_color] == 2 else 'solid'
+        
+        # On utilise line_shape='hv' pour un tracé en escalier (Gear Shift)
+        fig.add_trace(go.Scatter(
+            x=telemetry['Distance'], 
+            y=telemetry['nGear'],
+            mode='lines',
+            name=f"Rapports - {abb}",
+            line=dict(
+                color=team_color, 
+                width=3, 
+                dash=line_style,
+                shape='hv' # Important : dessine des marches d'escalier
+            ),
+            hovertemplate=f"<b>{abb}</b><br>Rapport: %{{y}}<br>Distance: %{{x}}m<extra></extra>"
+        ))
+
+    fig.update_layout(
+        title="<b>Comparaison des Rapports de Boîte (Gear)</b>",
+        xaxis_title="Distance (m)",
+        yaxis_title="Rapport Engagé",
+        yaxis=dict(
+            tickmode='linear',
+            tick0=1,
+            dtick=1,
+            range=[0.5, 8.5] # La boîte F1 va de 1 à 8
+        ),
+        template="plotly_dark",
+        height=450,
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        showlegend=True
+    )
+
+    return fig
+
+def add_corners_to_fig(fig, corners):
+    if corners is None:
+        return fig
+    else:
+        for _, corner in corners.iterrows():
+            fig.add_vline(
+                x=corner['Distance'],
+                line_width=1,
+                line_dash="dot",
+                line_color="rgba(255, 255, 255, 0.3)",
+                annotation_text=f"V{int(corner['Number'])}", # "V" pour Virage
+                annotation_position="bottom",
+                annotation_font_size=10,
+                annotation_font_color="grey",
+            )
+        return fig
