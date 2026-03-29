@@ -166,6 +166,9 @@ def main():
 
     drivers_df, constructors_df = get_current_standings(actual_date)
 
+    st.session_state['drivers_df'] = drivers_df
+    st.session_state['constructors_df'] = constructors_df
+
     display_f1_standings(drivers_df, constructors_df)
 
 if __name__ == "__main__":

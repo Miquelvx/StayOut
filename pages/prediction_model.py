@@ -7,7 +7,7 @@ import plotly.express as px
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error
 
-from Code.fonctions_predictions import initialize_feature_df, calculate_podium_proba, save_to_master_db, encoding_label
+from Code.fonctions_predictions import initialize_feature_df_race, initialize_feature_df_qualif, calculate_podium_proba, save_to_master_db, encoding_label
 
 # ----------------------------
 # CONFIG
@@ -18,6 +18,9 @@ st.set_page_config(page_title="StayOut - Race Analysis", layout="wide")
 if 'actual_date' in st.session_state:
     actual_date = st.session_state['actual_date']
 
+if 'actual_year' in st.session_state:
+    actual_year = st.session_state['actual_year']
+
 if 'df_calendar{actual_year}' in st.session_state:
     df_calendar = st.session_state['df_calendar{actual_year}']
 
@@ -25,6 +28,9 @@ if 'delta' in st.session_state:
     delta = st.session_state['delta']
     jours = delta.days
     heures = delta.seconds // 3600
+
+if 'constructors_df' in st.session_state:
+    constructors_df = st.session_state['constructors_df']
 
 # CSS Affichage tableau prédictions
 st.markdown("""
@@ -100,7 +106,7 @@ def main():
     if not os.path.exists(db_path):
         # Initialisation données premier GP
         print(" Première initialisation : Création du Master DB...")
-        df_master = initialize_feature_df(2026, 1)
+        df_master = initialize_feature_df_race(2026, 1)
 
         # Sauvegarde dataframe dans CSV
         save_to_master_db(df_master, db_path)
@@ -131,72 +137,87 @@ def main():
             """, unsafe_allow_html=True)
             st.markdown("---")
 
-            # --- 1. Initialiser les données du GP actuel pour la prédiction ---
-            df_next_gp = initialize_feature_df(2026, next_event['RoundNumber'])
+            file_path = f"./Database/Predictions/prediction_R{next_event['RoundNumber']}_2026.csv"
+            if not os.path.exists(file_path):
+                # --- 1. Initialiser les données du GP actuel pour la prédiction ---
+                df_next_gp = initialize_feature_df_qualif(2026, next_event['RoundNumber'])
 
-            # --- 2. Récupérer le momentum (last_qualif_pos) du GP précédent ---
-            mapping_last_quali = df_master[df_master['RoundNumber'] == next_event['RoundNumber']-1].set_index('Abbreviation')['qualif_pos'].to_dict()
-            df_next_gp['last_qualif_pos'] = df_next_gp['Abbreviation'].map(mapping_last_quali)
+                # --- 2. Récupérer le momentum (last_qualif_pos) du GP précédent ---
+                mapping_last_quali = df_master[df_master['RoundNumber'] == next_event['RoundNumber']-1].set_index('Abbreviation')['qualif_pos'].to_dict()
+                df_next_gp['last_qualif_pos'] = df_next_gp['Abbreviation'].map(mapping_last_quali)
 
-            # --- 3. Encodage des données textuelles ---
-            df_master, df_next_gp, encoders = encoding_label(df_master, df_next_gp)
+                # --- 3. Encodage des données textuelles ---
+                df_master, df_next_gp, encoders = encoding_label(df_master, df_next_gp)
 
-            # Données retenues pour l'entrainement du modèle
-            features = [
-                'Abbreviation', 'TeamName', 'qualif_pos', 'last_qualif_pos', 
-                'GapFromPole_pct', 'is_incident_quali', 'topspeed_kmh_qualif', 
-                'constructor_pos', 'team_performance_lastgp', 
-                'air_temp_forecast', 'track_temp_forecast', 'rain_proba_forecast'
-            ]
+                # Données retenues pour l'entrainement du modèle
+                features = [
+                    'Abbreviation', 'TeamName', 'qualif_pos', 'last_qualif_pos', 
+                    'GapFromPole_pct', 'is_incident_quali', 'topspeed_kmh_qualif', 
+                    'constructor_pos', 'team_performance_lastgp', 
+                    'air_temp_forecast', 'track_temp_forecast', 'rain_proba_forecast'
+                ]
 
-            # On entraîne sur l'historique (en filtrant les abandons techniques pour plus de pureté)
-            train_set = df_master[df_master['is_race_incident'] == 0]
+                # On entraîne sur l'historique (en filtrant les abandons techniques pour plus de pureté)
+                train_set = df_master[df_master['is_race_incident'] == 0]
 
-            X_train = train_set[features].copy()
-            y_train = train_set['race_finish_pos'].copy()
+                X_train = train_set[features].copy()
+                y_train = train_set['race_finish_pos'].copy()
 
-            X_predict = df_next_gp[features].copy()
+                X_predict = df_next_gp[features].copy()
 
-            # --- 4. Création du modèle ---
-            model = GradientBoostingRegressor(
-                n_estimators=100, 
-                learning_rate=0.1, 
-                max_depth=3, 
-                random_state=42
-            )
+                # --- 4. Création du modèle ---
+                model = GradientBoostingRegressor(
+                    n_estimators=100, 
+                    learning_rate=0.1, 
+                    max_depth=3, 
+                    random_state=42
+                )
 
-            # --- 5. Entraînement ---
-            model.fit(X_train, y_train)
+                # --- 5. Entraînement ---
+                model.fit(X_train, y_train)
 
-            # --- 6. Prédiction ---
-            predictions = model.predict(X_predict)
+                # --- 6. Prédiction ---
+                predictions = model.predict(X_predict)
 
-            # On ajoute les prédictions au DataFrame
-            df_next_gp['predicted_pos'] = predictions
+                # On ajoute les prédictions au DataFrame
+                df_next_gp['predicted_pos'] = predictions
 
-            # On trie pour voir qui finit premier
-            results = df_next_gp[['Abbreviation', 'predicted_pos']].sort_values(by='predicted_pos')
+                # On trie pour voir qui finit premier
+                results = df_next_gp[['Abbreviation', 'predicted_pos']].sort_values(by='predicted_pos')
 
-            # Calcul de la probabilité de podium
-            results['Podium_Proba_pct'] = results['predicted_pos'].apply(calculate_podium_proba)
+                # Calcul de la probabilité de podium
+                results['Podium_Proba_pct'] = results['predicted_pos'].apply(calculate_podium_proba)
 
-            # --- 7. Traduction ---
-            # On utilise l'encodeur stocké précédemment pour retrouver le nom du pilote
-            results['Driver'] = encoders['Abbreviation'].inverse_transform(results['Abbreviation'])
-            results['RoundNumber'] = df_next_gp['RoundNumber'].iloc[0]
-            results = results.sort_values(by='predicted_pos')
+                # --- 7. Traduction ---
+                # On utilise l'encodeur stocké précédemment pour retrouver le nom du pilote
+                results['Driver'] = encoders['Abbreviation'].inverse_transform(results['Abbreviation'])
+                results['RoundNumber'] = df_next_gp['RoundNumber'].iloc[0]
+                results = results.merge( df_next_gp[['Abbreviation', 'qualif_pos']],  left_on='Abbreviation',  right_on='Abbreviation',  how='left').drop(columns=['Abbreviation'])
+                results = results.sort_values(by='predicted_pos')
 
-            # --- 8. Nettoyage final ---
-            results = results.reset_index(drop=True)
-            results.index = results.index + 1
-            results.index.name = 'Pos'
+                # --- 8. Nettoyage final ---
+                results = results.reset_index(drop=True)
+                results.index = results.index + 1
+                results.index.name = 'Pos'
 
-            round_num = df_next_gp['RoundNumber'].iloc[0]
-            year = df_next_gp['Year'].iloc[0]
-            filename = f"./Database/Predictions/prediction_R{round_num}_{year}.csv"
+                round_num = df_next_gp['RoundNumber'].iloc[0]
+                year = df_next_gp['Year'].iloc[0]
+                filename = f"./Database/Predictions/prediction_R{round_num}_{year}.csv"
 
-            # --- 9. Sauvegarde dataframe en CSV ---
-            results.to_csv(filename, index_label='Predicted_Rank')
+                # --- 9. Sauvegarde dataframe en CSV ---
+                results.to_csv(filename, index_label='Predicted_Rank')
+
+                # Récupération des données importantes
+                importances = model.feature_importances_
+                indices = np.argsort(importances)
+
+                df_importance = pd.DataFrame({
+                    'Feature': [features[i] for i in indices],
+                    'Importance': importances[indices]
+                })
+                df_importance.to_csv(f"./Database/Predictions/features_importantes/importance_R{round_num}_2026.csv", index=False)
+            else: 
+                results = pd.read_csv(file_path)
 
             # HTML Affichage Tableau
             html_table = '<table class="f1-table">'
@@ -204,6 +225,7 @@ def main():
                 <thead>
                     <tr>   
                         <th class="f1-header">Pilote</th>
+                        <th class="f1-header">Position Départ</th>
                         <th class="f1-header">Prédiction</th>
                         <th class="f1-header">Probabilité Podium</th>
                     </tr>
@@ -214,7 +236,8 @@ def main():
             for index, row in results.iterrows():
                 html_table += f'''<tr class="f1-row">
                                     <td class="driver-cell">{row['Driver']}</td>
-                                    <td style="text-align:center">{index}</td>
+                                    <td style="text-align:center">{int(row['qualif_pos'])}</td>
+                                    <td style="text-align:center">{index+1}</td>
                                     <td style="text-align:center">{int(row['Podium_Proba_pct'])} %</td>
                                 </tr>'''
             html_table += '</tbody></table>'
@@ -228,14 +251,7 @@ def main():
             # Affichage du tableau final
             st.markdown(html_table, unsafe_allow_html=True)
 
-            # Récupération des données importantes
-            importances = model.feature_importances_
-            indices = np.argsort(importances)
-
-            df_importance = pd.DataFrame({
-                'Feature': [features[i] for i in indices],
-                'Importance': importances[indices]
-            })
+            df_importance = pd.read_csv(f"./Database/Predictions/features_importantes/importance_R{next_event['RoundNumber']}_2026.csv")
 
             # Graphique plotly pour affichage
             fig = px.bar(
@@ -263,7 +279,7 @@ def main():
 
         elif actual_date < next_event['Session4DateUtc']:
             # 2. Initialiser les données du GP passé
-            df_last_gp = initialize_feature_df(2026, last_event['RoundNumber'])
+            df_last_gp = initialize_feature_df_race(2026, last_event['RoundNumber'])
 
             # 3. Récupérer le momentum (last_qualif_pos) du GP précédent
             mapping_last_quali = df_master[df_master['RoundNumber'] == last_event['RoundNumber']-1].set_index('Abbreviation')['qualif_pos'].to_dict()
@@ -307,7 +323,7 @@ def main():
 
             # --- 3. Sécurité et enregistrement dans le log ---
             log_file = './Database/Predictions/accuracy_log.txt'
-            top1_check = df_compare.iloc[0]['race_finish_pos'] == 1.0
+            top1_check = df_compare.iloc[0]['Predicted_Rank'] == 1.0
             log_entry = f"Round {last_round} | MAE_Rank: {mae_rank:.2f} | MAE_Raw: {mae_raw:.2f} | Win_Prediction: {top1_check}\n"
 
             already_logged = False
