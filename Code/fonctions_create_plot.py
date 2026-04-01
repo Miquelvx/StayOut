@@ -2,8 +2,98 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from Code.constants import TEAM_COLORS
+from Code.constants import TEAM_COLORS, DRAPEAUX
 from Code.fonctions_get_data import get_circuit_corners
+
+def display_f1_progress_bar(current_round, total_rounds, futur_events):
+    progress_pct = (current_round / total_rounds) * 100
+    
+    # Construction des petites cases (Grid Items)
+    calendar_grid_html = ""
+    
+    for _, row in futur_events.iterrows():
+        # Formatage de la date (ex: "24 MAR")
+        try:
+            date_display = row['EventDate'].strftime('%d %b').upper()
+        except:
+            date_display = str(row['EventDate'])
+        
+        iso_code = DRAPEAUX.get(row['Country'], "un")  
+        url_drapeau = f"https://flagcdn.com/256x192/{iso_code}.png"
+            
+        # On simplifie le nom du GP pour qu'il tienne dans une petite case
+        short_name = row['EventName'].replace('Grand Prix', 'GP')
+
+        calendar_grid_html += f""" <div style="background: #1f1f27; padding: 10px; border-radius: 6px; border-bottom: 3px solid #38383f; text-align: center; min-width: 100px; font-family: 'Arial', sans-serif;">
+            <div style="color: #FF1801; font-weight: bold; font-size: 0.7em; margin-bottom: 6px;">
+                {date_display}
+            </div>
+            <div style="color: white; font-weight: bold; font-size: 0.75em; line-height: 1.1; margin-bottom: 10px;">
+                {short_name}
+            </div>
+            <img src="{url_drapeau}" style=" width: 40px; margin-right:auto; vertical-align:middle;">
+            <div style="color: #949498; font-size: 0.6em; margin-top: 8px; text-transform: uppercase;">
+                {row['Location']}
+            </div>
+        </div>
+        """
+
+    full_html = f"""
+    <style>
+        .f1-card {{
+            width: 100%; 
+            background-color: #15151e;
+            border-radius: 12px;
+            border-bottom: 5px solid #FF1801;
+            border-right: 5px solid #FF1801;
+            padding: 20px; 
+        }}
+        .calendar-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }}
+        .f1-bar-bg {{
+            background-color: #38383f; 
+            height: 10px; 
+            width: 100%;
+            border-radius: 10px; 
+            overflow: hidden; 
+            position: relative;
+            margin: 15px 0;
+        }}
+        .f1-bar-fill {{
+            background: linear-gradient(90deg, #e10600 0%, #ff312d 100%); 
+            height: 100%; 
+            width: {progress_pct}%;
+            border-right: 4px solid white;
+            transition: width 1s ease-in-out;
+        }}
+    </style>
+    <div class="f1-card">
+        <div style="display: flex; justify-content: space-between; color: white; font-size: 0.8em; font-weight: bold;">
+            <span style="font-family: 'Arial', sans-serif;"> PROGRESSION SAISON 2026 </span>
+            <span style="font-family: 'Arial', sans-serif font-weight: bold; font-size: 1.1em;"> {current_round} / {total_rounds} GP ({int(progress_pct)}%)</span>
+        </div>
+        <div class="f1-bar-bg">
+            <div class="f1-bar-fill"></div>
+        </div>
+        <details style="cursor: pointer; color: #949498; font-size: 1em;"> 
+            <summary style="list-style: none; outline: none;">
+                <div style="display: flex; justify-content: end; align-items: center; color: #949498; font-size: 1em;">
+                    <span style="color: #FF1801; font-weight: bold; font-size: 0.8em;"> CALENDRIER RESTANT ▼ </span>
+                </div>
+            </summary>
+            <div class="calendar-grid"> {calendar_grid_html} </div>
+        </details>
+    </div>
+    """
+    
+    return st.markdown(full_html, unsafe_allow_html=True)
 
 def display_f1_standings(drivers_df, constructors_df):
     # CSS pour le style "Live Timing"

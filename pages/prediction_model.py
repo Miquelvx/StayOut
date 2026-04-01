@@ -278,14 +278,16 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
 
         elif actual_date < next_event['Session4DateUtc']:
-            # 2. Initialiser les données du GP passé
-            df_last_gp = initialize_feature_df_race(2026, last_event['RoundNumber'])
+            
+            if df_master['RoundNumber'].max() != last_event['RoundNumber']:
+                # 2. Initialiser les données du GP passé
+                df_last_gp = initialize_feature_df_race(2026, last_event['RoundNumber'])
 
-            # 3. Récupérer le momentum (last_qualif_pos) du GP précédent
-            mapping_last_quali = df_master[df_master['RoundNumber'] == last_event['RoundNumber']-1].set_index('Abbreviation')['qualif_pos'].to_dict()
-            df_last_gp['last_qualif_pos'] = df_last_gp['Abbreviation'].map(mapping_last_quali)
+                # 3. Récupérer le momentum (last_qualif_pos) du GP précédent
+                mapping_last_quali = df_master[df_master['RoundNumber'] == last_event['RoundNumber']-1].set_index('Abbreviation')['qualif_pos'].to_dict()
+                df_last_gp['last_qualif_pos'] = df_last_gp['Abbreviation'].map(mapping_last_quali)
 
-            save_to_master_db(df_last_gp, db_path)
+                save_to_master_db(df_last_gp, db_path)
 
             st.markdown("---")
             # Compte à rebours next GP

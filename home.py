@@ -7,7 +7,7 @@ import time
 
 from Code.fonctions_cache_data import get_cache_size, clear_cache_data
 from Code.fonctions_get_data import get_calendar, get_current_standings
-from Code.fonctions_create_plot import display_f1_standings
+from Code.fonctions_create_plot import display_f1_progress_bar, display_f1_standings
 from Code.constants import DRAPEAUX
 
 # ----------------------------
@@ -60,8 +60,6 @@ st.markdown("""
 # MAIN STREAMLIT APP
 # ----------------------------
 def main():
-    st.title("🏁 F1 Dashboard 2026")
-
     with st.sidebar:
         st.divider()
         st.subheader("⚙️ Gestion du Cache")
@@ -106,7 +104,7 @@ def main():
         nom_gp = next_event['EventName'].upper()
         pays_lieu = f"ROUND {next_event['RoundNumber']} • {next_event['Country']} • {next_event['Location']}"
         iso_code = DRAPEAUX.get(next_event['Country'], "un")  
-        url_drapeau = f"https://flagcdn.com/w40/{iso_code}.png"
+        url_drapeau = f"https://flagcdn.com/h40/{iso_code}.png"
 
         sessions_html = ""
         icones = {"Practice 1": "FP1", "Practice 2": "FP2", "Practice 3": "FP3", "Qualifying": "QUAL", "Sprint Qualifying": "SQUAL", "Sprint": "SPRINT", "Race": "RACE"}
@@ -133,7 +131,7 @@ def main():
                 <span class="f1-tag">Next Race</span>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                     <div class="f1-title" style="font-weight: bold; color: white;">
-                        {nom_gp} <img src="{url_drapeau}" style="width:40px; margin-right:15px; vertical-align:middle;">
+                        {nom_gp} <img src="{url_drapeau}" style="width:60px; margin-right:15px; vertical-align:middle;">
                     </div>
                     <div style="text-align: right; min-width: 120px;">
                         <div style="color: #FF1801; font-size: 2.2em; font-weight: bold; font-family: sans-serif; line-height: 1;">
@@ -160,9 +158,12 @@ def main():
     else:
         st.info("La saison est terminée ! Rendez-vous l'année prochaine.")
 
-    # Affichage du calendrier complet en dessous (optionnel)
-    if st.checkbox("Voir tout le calendrier"):
-        st.dataframe(df_calendar, use_container_width=True)
+    total_rounds = int(df_calendar['RoundNumber'].max())
+    current_round = int(next_event['RoundNumber']-1)
+
+    display_f1_progress_bar(current_round=current_round, total_rounds=total_rounds, futur_events=futur_events)
+
+    st.divider()
 
     drivers_df, constructors_df = get_current_standings(actual_date)
 

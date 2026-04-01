@@ -20,7 +20,7 @@ DRAPEAUX = {
     "Mexico": "mx", 
     "Brazil": "br",
     "Qatar": "qa", 
-    "Abu Dhabi": "ae", 
+    "United Arab Emirates": "ae", 
     "France": "fr"
 }
 

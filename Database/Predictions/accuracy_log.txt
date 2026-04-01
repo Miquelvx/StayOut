@@ -2,3 +2,4 @@
 Comparaison position prédite avec position réelle.
 
 Round 2 | MAE_Rank: 4.91 | MAE_Raw: 4.35 | Win_Prediction: False
+Round 3 | MAE_Rank: 2.64 | MAE_Raw: 2.87 | Win_Prediction: True
