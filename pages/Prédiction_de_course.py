@@ -8,6 +8,7 @@ from sklearn.metrics import mean_absolute_error
 
 from Code.fonctions_predictions import initialize_feature_df_race, initialize_feature_df_qualif, calculate_podium_proba, encoding_label
 from Code.fonctions_google_sheet import sheet_exists, read_sheet, save_to_master_db_sheet, save_prediction_sheet, read_prediction_sheet, prediction_exists, save_importance_sheet, read_importance_sheet, importance_exists, log_accuracy_sheet
+from Code.fonctions_generate_pdf import generate_comparison_pdf, generate_prediction_pdf
 
 # ----------------------------
 # CONFIG
@@ -17,7 +18,7 @@ st.set_page_config(page_title="StayOut - Prédiction de course", layout="wide")
 
 if 'actual_date' in st.session_state:
     actual_date = st.session_state['actual_date']
-    #actual_date = pd.to_datetime("2026-03-18 12:00:00")
+    #actual_date = pd.to_datetime("2026-03-28 12:00:00")
 
 if 'actual_year' in st.session_state:
     actual_year = st.session_state['actual_year']
@@ -317,6 +318,24 @@ def main():
             st.markdown("---")
             st.plotly_chart(fig, use_container_width=True)
 
+            # Génération rapport PDF
+            st.markdown("---")
+            pdf_buffer = generate_prediction_pdf(
+                results = results,
+                df_importance = df_importance,
+                event_name = next_event['EventName'],
+                round_num = int(next_event['RoundNumber']),
+                date_event = next_event['EventDate'],
+                year = actual_year
+            )
+            st.download_button(
+                label="📄 Télécharger le rapport de prédiction",
+                data=pdf_buffer,
+                file_name=f"StayOut_Prediction_PRE_R{int(next_event['RoundNumber'])}_2026.pdf",
+                mime="application/pdf",
+                use_container_width=True
+)
+
         # Cas 2 : Date après le Grand Prix -> récupération des résultats et comparaison
         elif actual_date < next_event['Session4DateUtc']:
             
@@ -424,6 +443,26 @@ def main():
 
             # Affichage du tableau final
             st.markdown(html_table, unsafe_allow_html=True)
+
+            # Génération rapport PDF
+            st.markdown("---")
+            pdf_buffer = generate_comparison_pdf(
+                df_compare = df_compare,
+                mae_rank = mae_rank,
+                mae_raw = mae_raw,
+                top1_check = top1_check,
+                event_name = last_event['EventName'],
+                round_num = int(last_event['RoundNumber']),
+                date_event = last_event['EventDate'],
+                year = actual_year
+            )
+            st.download_button(
+                label="📄 Télécharger l'analyse post-course",
+                data=pdf_buffer,
+                file_name=f"StayOut_Analysis_POST_R{int(last_event['RoundNumber'])}_2026.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
     else:
         st.info("La saison est terminée, rendez-vous l'année prochaine.")
 
