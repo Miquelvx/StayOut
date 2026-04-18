@@ -1,10 +1,11 @@
+import os
 import io
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.enums import TA_CENTER
 
 # ── Couleurs ──────────────────────────────────────────────────────────────────
@@ -101,11 +102,17 @@ def base_styles():
 
 
 # ── Header commun ─────────────────────────────────────────────────────────────
-def build_header(styles, event_name, round_num, date_event, year, doc_type):
+def build_header(styles, event_name, round_num, date_event, year, doc_type, logo_path=None):
     story = []
 
-    # Logo texte StayOut
-    story.append(Paragraph("STAYOUT", styles['app_title']))
+    # Logo image ou texte fallback
+    if logo_path and os.path.exists(logo_path):
+        logo = RLImage(logo_path, width=5*cm, height=3*cm, kind='proportional')
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+    else:
+        # Fallback texte si pas de logo
+        story.append(Paragraph("STAYOUT", styles['app_title']))
 
     # Titre du document
     story.append(Paragraph(f"{year} {event_name.upper()}", styles['doc_title']))
@@ -160,7 +167,7 @@ def draw_footer(canvas, doc, round_num, year):
     canvas.drawCentredString(
         page_width / 2,
         footer_y,
-        f"StayOut - Prediction Report  |  Round {round_num} - {year}  |  Generated {datetime.now().strftime('%d %b %Y - %H:%M')}"
+        f"Stayout - Prediction Report  |  Round {round_num} - {year}  |  Generated {datetime.now().strftime('%d %b %Y - %H:%M')}"
     )
     canvas.restoreState()
 
@@ -202,7 +209,7 @@ def generate_prediction_pdf(results, df_importance, event_name, round_num, date_
     story = []
 
     # ── Header ────────────────────────────────────────────────────────────────
-    story += build_header(styles, event_name, round_num, date_event, year, "Pre-Race Prediction")
+    story += build_header(styles, event_name, round_num, date_event, year, "Pre-Race Prediction", logo_path="./assets/Logo_Stayout.png")
 
     # ── Title ────────────────────────────────────────────────────────────────
     story.append(Paragraph("Prediction Report", styles['title']))
@@ -297,7 +304,6 @@ def generate_prediction_pdf(results, df_importance, event_name, round_num, date_
     img_buffer.seek(0)
 
     # Insertion dans le PDF
-    from reportlab.platypus import Image as RLImage
     fig_w, fig_h = fig.get_size_inches()
     ratio = fig_h / fig_w
 
@@ -329,7 +335,7 @@ def generate_comparison_pdf(df_compare, mae_rank, mae_raw, top1_check, event_nam
     story = []
 
     # ── Header ────────────────────────────────────────────────────────────────
-    story += build_header(styles, event_name, round_num, date_event, year, "Post-Race Analysis")
+    story += build_header(styles, event_name, round_num, date_event, year, "Post-Race Analysis", logo_path="./assets/Logo_Stayout.png")
 
     # ── Title ────────────────────────────────────────────────────────────────
     story.append(Paragraph("Prediction Report", styles['title']))
