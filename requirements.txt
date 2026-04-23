@@ -2,9 +2,9 @@ streamlit
 pandas
 numpy
 fastf1
-tempfile
 matplotlib
 plotly
-sklearn
+scikit-learn
 reportlab
 gspread
+gspread-dataframe
