@@ -4,14 +4,7 @@
 # IMPORTATIONS DES LIBRAIRIES
 # ----------------------------
 import streamlit as st
-import fastf1
-import pandas as pd
-import plotly.graph_objects as go
-import numpy as np
-import os
 import time
-
-import plotly.graph_objects as go
 
 from Code.fonctions_get_data import get_calendar,get_qualif_session,get_drivers_telemetry, get_circuit_corners
 from Code.fonctions_create_plot import create_comparison_telemetry, create_pedal_comparison, create_gear_comparison, add_corners_to_fig

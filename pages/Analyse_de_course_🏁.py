@@ -4,13 +4,6 @@
 # IMPORTATIONS DES LIBRAIRIES
 # ----------------------------
 import streamlit as st
-import fastf1
-import pandas as pd
-import plotly.graph_objects as go
-import numpy as np
-import os
-
-import plotly.graph_objects as go
 
 from Code.fonctions_get_data import get_calendar,get_race_session, calculate_race_metrics
 from Code.fonctions_create_plot import create_lap_chart

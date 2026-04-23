@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+fastf1
+tempfile
+matplotlib
+plotly
+sklearn
+reportlab
+gspread
