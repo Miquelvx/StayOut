@@ -58,6 +58,7 @@ pages/                                      # Répertoire des fichiers des pages
 ├── Head_to_head_qualification_⚔️.py        # Fichier python de la page head to head des télémétries de qualification
 ├── Prédiction_de_course_⚙️.py              # Fichier python de la page de prédiction de course
 └── Replay_de_course_📹.py                  # Fichier python de la page de replay de course (Not Finished)
+```
 
 ## Auteurs
 
