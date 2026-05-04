@@ -245,7 +245,7 @@ def main():
                 # --- 8. Nettoyage final ---
                 results = results.reset_index(drop=True)
                 results.index = results.index + 1
-                results.index.name = 'Pos'
+                results.index.name = 'Predicted_Rank'
 
                 round_num = df_next_gp['RoundNumber'].iloc[0]
                 year = df_next_gp['Year'].iloc[0]
